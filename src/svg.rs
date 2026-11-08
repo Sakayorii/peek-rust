@@ -5,7 +5,7 @@ use crate::draw::{draw, rest_pose, Pose};
 use crate::identity::{fnv1a, identify, Identity};
 use crate::js::{js_json_stringify, JVal};
 use crate::scene::SNode;
-use crate::tables::LATEST;
+use crate::tables::{LATEST, VARIANTS};
 
 /// Render options. An explicit face/color/part wins over the hash; every
 /// other axis stays put.
@@ -33,6 +33,8 @@ pub struct PeekOptions {
     pub title: Option<String>,
     pub hide_title: bool,
     pub version: u32,
+    /// How the face is drawn: "peek", "haze" or "bloc". Never who it is.
+    pub variant: Option<String>,
 }
 
 impl Default for PeekOptions {
@@ -58,6 +60,7 @@ impl Default for PeekOptions {
             title: None,
             hide_title: false,
             version: LATEST,
+            variant: None,
         }
     }
 }
@@ -69,6 +72,7 @@ pub struct DrawOpts {
     pub square: bool,
     pub riso: bool,
     pub live: bool,
+    pub variant: String,
     pub id: String,
     /// Resolved title: the name, an override, or None when hidden.
     pub title: Option<String>,
@@ -134,14 +138,19 @@ fn pose_to_json(pose: &Pose) -> JVal {
     JVal::Obj(entries)
 }
 
-fn look_to_json(o: &PeekOptions, live: bool) -> JVal {
-    JVal::Obj(vec![
+fn look_to_json(o: &PeekOptions, live: bool, variant: &str) -> JVal {
+    let mut entries = vec![
         ("size".to_string(), JVal::Num(o.size)),
         ("frame".to_string(), JVal::Str(o.frame.clone())),
         ("square".to_string(), JVal::Bool(o.square)),
         ("riso".to_string(), JVal::Bool(o.riso)),
         ("live".to_string(), JVal::Bool(live)),
-    ])
+    ];
+    // left out for peek, so its ids and bytes stay as they were
+    if variant != "peek" {
+        entries.push(("variant".to_string(), JVal::Str(variant.to_string())));
+    }
+    JVal::Obj(entries)
 }
 
 fn to_base36(mut v: u32) -> String {
@@ -184,13 +193,18 @@ pub fn settle(name: &str, o: &PeekOptions, live: bool) -> (Identity, Pose, DrawO
     let wardrobe =
         who.eyewear != "none" || who.headwear != "none" || who.neckwear != "none";
     let pose = rest_pose(&who, &o.expression, o.gaze);
+    // an unknown variant draws peek
+    let variant: &str = match o.variant.as_deref() {
+        Some(v) if VARIANTS.contains(&v) => v,
+        _ => "peek",
+    };
     let id = o.id.clone().unwrap_or_else(|| {
         format!(
             "peek-{}",
             to_base36(fnv1a(&js_json_stringify(&JVal::Arr(vec![
                 who_to_json(&who, wardrobe),
                 pose_to_json(&pose),
-                look_to_json(o, live),
+                look_to_json(o, live, variant),
             ]))))
         )
     });
@@ -200,6 +214,7 @@ pub fn settle(name: &str, o: &PeekOptions, live: bool) -> (Identity, Pose, DrawO
         square: o.square,
         riso: o.riso,
         live,
+        variant: variant.to_string(),
         id,
         title: if o.hide_title {
             None

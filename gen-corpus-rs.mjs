@@ -71,6 +71,35 @@ add('Sakayori', { eyewear: 'glasses', size: 128 });
 add('Sakayori', { headwear: 'sprout', size: 24 });
 add('Sakayori', { neckwear: 'tie', expression: 'confused' });
 
+// variants: every variant for a few names and all expressions, variants
+// combined with accessories, faces, colors, sizes and frames
+const VARIANTS = ['haze', 'bloc'];
+for (const name of ['Sakayori', 'rem', 'Nguyễn Văn An', '😀']) {
+  for (const variant of VARIANTS) {
+    add(name, { variant });
+    for (const expression of EXPRESSIONS) add(name, { variant, expression });
+  }
+}
+for (const variant of VARIANTS) {
+  for (const face of FACES) add('Sakayori', { variant, face });
+  for (const color of COLORS) add('Sakayori', { variant, color });
+  add('Sakayori', { variant, eyewear: 'glasses', headwear: 'cap', neckwear: 'tie' });
+  add('Rem', { variant, eyewear: 'sunglasses', headwear: 'sprout', expression: 'happy' });
+  for (const size of [16, 24, 31, 32, 40, 96, 200, 480]) add('Sakayori', { variant, size });
+  for (const frame of ['ink', 'bone', 'paper', 'none']) add('Sakayori', { variant, frame });
+  add('Sakayori', { variant, riso: true, size: 480 });
+  add('Sakayori', { variant, square: false });
+  add('Sakayori', { variant, eyes: 'bead', expression: 'curious' });
+  add('Sakayori', { variant, eyes: 'ring' });
+  add('Sakayori', { variant, mouth: 'poly' });
+  add('Sakayori', { variant, mouth: 'box' });
+  add('Sakayori', { variant, mouth: 'line' });
+  add('Sakayori', { variant, trait: 'peak' });
+  add('Sakayori', { variant, trait: 'fin' });
+  add('Sakayori', { variant, gaze: [0.5, -0.3] });
+}
+add('Sakayori', { variant: 'bogus' }); // an unknown variant draws peek
+
 for (const size of [24, 29, 30, 39, 40, 55, 56, 95, 96, 120, 480, 640])
   add('Sakayori', { size });
 for (const frame of ['ink', 'bone', 'paper', 'none']) add('Sakayori', { frame });
@@ -132,6 +161,7 @@ pub struct GoldenCase {
     pub mouth: Option<&'static str>,
     pub cheeks: Option<&'static str>,
     pub trait_: Option<&'static str>,
+    pub variant: Option<&'static str>,
     pub eyewear: Option<&'static str>,
     pub headwear: Option<&'static str>,
     pub neckwear: Option<&'static str>,
@@ -158,7 +188,7 @@ for (const { name: rawName, opts } of cases) {
   const svg = toSvg(name, toJsOpts(opts));
   const f = (k) => ropt(opts[k]);
   const gaze = opts.gaze ? `Some([${rnum(opts.gaze[0])}, ${rnum(opts.gaze[1])}])` : 'None';
-  src += `    GoldenCase { name: ${rstr(name)}, face: ${f('face')}, color: ${f('color')}, eyes: ${f('eyes')}, brows: ${f('brows')}, mouth: ${f('mouth')}, cheeks: ${f('cheeks')}, trait_: ${f('trait')}, eyewear: ${f('eyewear')}, headwear: ${f('headwear')}, neckwear: ${f('neckwear')}, expression: ${rstr(opts.expression || 'normal')}, gaze: ${gaze}, size: ${rnum(opts.size || 64)}, frame: ${rstr(opts.frame || 'ink')}, square: ${opts.square !== false}, riso: ${!!opts.riso}, id: ${f('id')}, title: ${f('title')}, hide_title: ${!!opts.hideTitle}, svg: ${rstr(svg)} },\n`;
+  src += `    GoldenCase { name: ${rstr(name)}, face: ${f('face')}, color: ${f('color')}, eyes: ${f('eyes')}, brows: ${f('brows')}, mouth: ${f('mouth')}, cheeks: ${f('cheeks')}, trait_: ${f('trait')}, variant: ${f('variant')}, eyewear: ${f('eyewear')}, headwear: ${f('headwear')}, neckwear: ${f('neckwear')}, expression: ${rstr(opts.expression || 'normal')}, gaze: ${gaze}, size: ${rnum(opts.size || 64)}, frame: ${rstr(opts.frame || 'ink')}, square: ${opts.square !== false}, riso: ${!!opts.riso}, id: ${f('id')}, title: ${f('title')}, hide_title: ${!!opts.hideTitle}, svg: ${rstr(svg)} },\n`;
 }
 src += '];\n';
 

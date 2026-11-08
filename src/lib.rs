@@ -8,6 +8,7 @@
 //! Part of the peek family: `peek` (original, React) · `peek-vanilla` (JS) ·
 //! `peek-kotlin` (JVM) · `peek-rust` (Rust).
 
+pub mod bloc;
 pub mod draw;
 pub mod identity;
 pub mod js;

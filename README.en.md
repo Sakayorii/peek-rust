@@ -36,15 +36,16 @@ let svg = to_svg("Sakayori", &PeekOptions {
 
 ## Verification
 
-The port is verified byte-identical against peek-vanilla on a 500-case golden
+The port is verified byte-identical against peek-vanilla on a 667-case golden
 corpus: curated names (unicode, emoji, whitespace, NFC, control chars, XML
 escapes), all 11 expressions, every axis override, every accessory slot and
-accessory combinations, sizes, frames, riso, titles, explicit ids, gaze,
+accessory combinations, all three drawing variants and variants combined
+with accessories, sizes, frames, riso, titles, explicit ids, gaze,
 plus 300 seeded fuzz names.
 
 ```sh
 node gen-corpus-rs.mjs   # regenerate tests/corpus_data.rs from peek-vanilla
-cargo test               # 500 golden cases + determinism checks
+cargo test               # 667 golden cases + determinism checks
 ```
 
 One deliberate difference from the JS: a Rust `&str` cannot hold lone
@@ -53,10 +54,12 @@ the same thing `TextEncoder` feeds the hash on the JS side.
 
 ## Upstream version
 
-This release ports upstream @doan-labs/peek 1.1.0: the accessories system
-(eyewear, headwear, neckwear) on top of the 1.0 engine. Faces without
-accessories render byte for byte as before. `PeekOptions` carries the three
-slots as `eyewear`, `headwear` and `neckwear` fields.
+This release ports upstream @doan-labs/peek 2.0.0: the accessories system
+from 1.1 (eyewear, headwear, neckwear) and the drawing variants from 2.0
+(haze, bloc) on top of the 1.0 engine. Faces drawn with the peek variant
+render byte for byte as before. `PeekOptions` carries the three accessory
+slots as `eyewear`, `headwear` and `neckwear` fields, and the drawing
+variant as a `variant` field.
 
 ## License
 

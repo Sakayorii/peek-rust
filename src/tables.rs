@@ -41,6 +41,33 @@ pub static ACCESSORY_INK: &[(&str, &str)] = &[("knot", "#E5412D")];
 
 pub static ACCESSORIES: &[(&str, &[&str])] = &[("eyewear", &["none", "glasses", "sunglasses"]), ("headwear", &["none", "bow", "cap", "sprout"]), ("neckwear", &["none", "tie"])];
 
+// Variants: how a face is drawn, never who it is. Every variant reads the
+// same identity, so a name keeps its face, color and parts in all of them.
+pub static VARIANTS: &[&str] = &["peek", "haze", "bloc"];
+
+pub struct HazeDef { pub tint: &'static str, pub glow: &'static str }
+
+// Haze, transcribed from the Haze sheet (01.3). Each ink has a glow and a
+// tint; a body is hazed by the tint of one of its two neighbors on the hue
+// wheel, so the tint is never picked by hand.
+pub static HAZE: &[(&str, HazeDef)] = &[("lavender", HazeDef { tint: "#C8B1F5", glow: "#F2EDFD" }), ("fog", HazeDef { tint: "#9EC3F2", glow: "#E6F1FF" }), ("clay", HazeDef { tint: "#F4AE93", glow: "#FEECE5" }), ("mint", HazeDef { tint: "#A3DAB5", glow: "#E5F5EA" }), ("butter", HazeDef { tint: "#E1CC7A", glow: "#F4F0E0" }), ("rose", HazeDef { tint: "#F0A9C4", glow: "#FDEAF1" }), ("aqua", HazeDef { tint: "#85D3DC", glow: "#E0F5F7" })];
+
+// The hue wheel, warm to cool: a body's warm side is the entry before it.
+pub static WHEEL: &[&str] = &["clay", "butter", "mint", "aqua", "fog", "lavender", "rose"];
+
+// Bloc's strong inks, palette P2 of the Bloc sheet (02.4): the same hue at
+// OKLCH L 0.72 and C 0.12, butter, mint and aqua held lighter so none goes
+// olive. The strong ink fills the dark half and the trait.
+pub static BLOC: &[(&str, &str)] = &[("lavender", "#B093E5"), ("fog", "#7BA8DF"), ("clay", "#E38A66"), ("mint", "#82CB9B"), ("butter", "#E2CA6A"), ("rose", "#DF84A8"), ("aqua", "#5EC3CD")];
+
+pub fn haze(name: &str) -> &'static HazeDef {
+    &HAZE.iter().find(|(n, _)| *n == name).map(|(_, v)| v).expect("known color")
+}
+
+pub fn bloc_ink(name: &str) -> &'static str {
+    BLOC.iter().find(|(n, _)| *n == name).map(|(_, v)| *v).expect("known color")
+}
+
 pub static VERSIONS: &[(u32, &[(&str, u32)])] = &[(1, &[("face", 4), ("color", 7), ("eyes", 3), ("brows", 4), ("mouth", 4), ("cheeks", 3), ("trait", 5), ("eyewear", 1), ("headwear", 1), ("neckwear", 1)])];
 
 pub const LATEST: u32 = 1;

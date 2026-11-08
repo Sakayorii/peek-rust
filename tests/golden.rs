@@ -13,6 +13,7 @@ fn opts_for(c: &corpus_data::GoldenCase) -> PeekOptions {
         mouth: c.mouth.map(|s| s.to_string()),
         cheeks: c.cheeks.map(|s| s.to_string()),
         trait_: c.trait_.map(|s| s.to_string()),
+        variant: c.variant.map(|s| s.to_string()),
         eyewear: c.eyewear.map(|s| s.to_string()),
         headwear: c.headwear.map(|s| s.to_string()),
         neckwear: c.neckwear.map(|s| s.to_string()),

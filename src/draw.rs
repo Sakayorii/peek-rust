@@ -5,7 +5,7 @@
 //! so a live tree keeps the same nodes frame to frame. A static tree drops
 //! what is invisible (opacity 0) to stay small.
 
-use crate::identity::Identity;
+use crate::identity::{fnv1a, Identity, Mulberry32};
 use crate::js::{f2, f3, js_num_to_string, js_round};
 use crate::scene::{n, prune, AttrVal, SNode};
 use crate::svg::DrawOpts;
@@ -246,6 +246,146 @@ pub fn ring_walk(sh: &FaceDef) -> (f64, f64) {
     }
 }
 
+
+/*
+ * Haze, from the Haze sheet: the body is its own ink plus three soft radial
+ * blobs, cut to the outline. A deep one at the bottom, a tint from a hue
+ * neighbor low on the outer edge, a glow at the top. Where they sit comes
+ * from the name, mulberry32(fnv1a('haze:' + key)), so two faces of one
+ * color haze apart.
+ * Blob sizes are in body widths; the light level, used below 32px, keeps
+ * the face nearly peek where the haze would only be mud.
+ */
+struct HazeLevel {
+    deep: [f64; 2],
+    glow: [f64; 2],
+    tint: [f64; 2],
+    tint_stops: &'static [[f64; 2]],
+}
+
+const HAZE_LEVEL_MEDIUM: HazeLevel = HazeLevel {
+    deep: [0.502, 0.224],
+    glow: [0.749, 0.337],
+    tint: [0.4, 0.5],
+    tint_stops: &[[0.0, 0.878], [0.15, 0.878], [0.618, 0.396]],
+};
+const HAZE_LEVEL_LIGHT: HazeLevel = HazeLevel {
+    deep: [0.298, 0.133],
+    glow: [0.549, 0.247],
+    tint: [0.31, 0.387],
+    tint_stops: &[[0.0, 0.549], [0.55, 0.247]],
+};
+
+pub fn haze_paint(who: &Identity, o: &DrawOpts) -> Vec<SNode> {
+    let sh = tables::face(&who.face);
+    let id = &o.id;
+    let l = if o.size < 32.0 { &HAZE_LEVEL_LIGHT } else { &HAZE_LEVEL_MEDIUM };
+    // the body's box: the crown grown by its radius, down to the bottom
+    let xs: Vec<f64> = sh.crown.poly.iter().map(|pt| pt[0]).collect();
+    let ys: Vec<f64> = sh.crown.poly.iter().map(|pt| pt[1]).collect();
+    let x0 = xs.iter().cloned().fold(f64::INFINITY, f64::min) - sh.crown.r;
+    let y0 = ys.iter().cloned().fold(f64::INFINITY, f64::min) - sh.crown.r;
+    let w_ = xs.iter().cloned().fold(f64::NEG_INFINITY, f64::max) + sh.crown.r - x0;
+    let h_ = sh.bottom - y0;
+    // the sheet's own seed and draw order, fitted to its 12 names: never
+    // reorder these lines. The tint walks one track, low and out to high and in.
+    let mut rnd = Mulberry32::new(fnv1a(&format!("haze:{}", who.key)));
+    let warm = rnd.next() < 0.5;
+    let left = rnd.next() < 0.5;
+    let t = rnd.next();
+    let tint_x = 0.04 + 0.174 * t;
+    let tint_y = 0.649 + 0.202 * t;
+    let glow_x = 0.38 - 0.12 * rnd.next();
+    let glow_y = 0.12 + 0.099 * rnd.next();
+    let deep_x = 0.251 - 0.151 * rnd.next();
+    let tint_a = 90.0 - 180.0 * rnd.next();
+    let at = |inset: f64, on_left: bool| x0 + w_ * (if on_left { inset } else { 1.0 - inset });
+    let wi = tables::WHEEL.iter().position(|c| *c == who.color).expect("known color");
+    let near = tables::WHEEL[(wi + if warm { tables::WHEEL.len() - 1 } else { 1 }) % tables::WHEEL.len()];
+    let body_col = tables::color(&who.color);
+    let blob = |k: &str, color: &str, geo: [f64; 5], stops: &[[f64; 2]]| -> SNode {
+        let mut all_stops: Vec<[f64; 2]> = stops.to_vec();
+        all_stops.push([1.0, 0.0]);
+        n(
+            "radialGradient",
+            &format!("haze.{}", k),
+            vec![
+                ("id", format!("{}-h{}", id, &k[..1]).into()),
+                ("gradientUnits", "userSpaceOnUse".into()),
+                ("cx", 0.into()),
+                ("cy", 0.into()),
+                ("r", 1.into()),
+                (
+                    "gradientTransform",
+                    format!(
+                        "translate({} {}) rotate({}) scale({} {})",
+                        f2(geo[0]), f2(geo[1]), f2(geo[2]), f2(geo[3]), f2(geo[4])
+                    )
+                    .into(),
+                ),
+            ],
+            all_stops
+                .iter()
+                .enumerate()
+                .map(|(j, stp)| {
+                    n(
+                        "stop",
+                        &format!("haze.{}.{}", k, j),
+                        vec![
+                            ("offset", stp[0].into()),
+                            ("stop-color", color.into()),
+                            ("stop-opacity", stp[1].into()),
+                        ],
+                        vec![],
+                    )
+                })
+                .collect(),
+        )
+    };
+    let fade = |pr: [f64; 2]| vec![[0.0, pr[0]], [0.55, pr[1]]];
+    let blobs = vec![
+        blob("deep", body_col.deep, [at(deep_x, !left), y0 + h_ * 0.95, 0.0, w_ * 0.5, w_ * 0.35], &fade(l.deep)),
+        blob("tint", tables::haze(near).tint, [at(tint_x, left), y0 + h_ * tint_y, tint_a, w_ * l.tint[0], w_ * l.tint[1]], l.tint_stops),
+        blob("glow", tables::haze(&who.color).glow, [at(glow_x, !left), y0 + h_ * glow_y, 0.0, w_ * 0.475, w_ * 0.356], &fade(l.glow)),
+    ];
+    let shape = |key: &str, paint: &str| -> SNode {
+        if let Some(d) = sh.body.d {
+            n(
+                "path",
+                key,
+                vec![
+                    ("d", d.into()),
+                    ("fill", paint.into()),
+                    ("stroke", if sh.body.stroke.is_some() { Some(paint) } else { None }.into()),
+                    ("stroke-width", sh.body.stroke.into()),
+                    ("stroke-linejoin", if sh.body.stroke.is_some() { Some("round") } else { None }.into()),
+                ],
+                vec![],
+            )
+        } else {
+            let c = sh.body.circle.expect("face body needs d or circle");
+            n(
+                "circle",
+                key,
+                vec![
+                    ("cx", c[0].into()),
+                    ("cy", c[1].into()),
+                    ("r", c[2].into()),
+                    ("fill", paint.into()),
+                ],
+                vec![],
+            )
+        }
+    };
+    let mut out = blobs;
+    let mut haze_children = vec![shape("haze.body", body_col.body)];
+    for k in ["deep", "tint", "glow"] {
+        haze_children.push(shape(&format!("haze.{}.fill", k), &format!("url(#{}-h{})", id, &k[..1])));
+    }
+    out.push(n("g", "haze", vec![("id", format!("{}-hz", id).into())], haze_children));
+    out
+}
+
 pub fn draw(who: &Identity, pose: &Pose, o: &DrawOpts) -> SNode {
     let sh = tables::face(&who.face);
     let color = tables::color(&who.color);
@@ -465,7 +605,25 @@ pub fn draw(who: &Identity, pose: &Pose, o: &DrawOpts) -> SNode {
     let b_ = sh.bottom;
     let ty = base_y - alt * r_;
     let sc = |v: f64| js_round(v * 100000.0) as f64 / 100000.0;
-    let body_node = if let Some(d) = sh.body.d {
+    // the plates sit a hair out of register at large sizes
+    let off = |dx: f64, dy: f64| -> Option<String> {
+        if riso {
+            Some(format!("translate({} {})", f2(dx * k * upp), f2(dy * k * upp)))
+        } else {
+            None
+        }
+    };
+    let variant = o.variant.as_str();
+    let haze = variant == "haze";
+    let (front, back) = if variant == "bloc" {
+        crate::bloc::bloc_parts(who, pose, o, &mut defs, &g)
+    } else {
+    if haze {
+        defs.extend(haze_paint(who, o));
+    }
+    let body_node = if haze {
+        n("use", "body", vec![("href", format!("#{}-hz", id).into())], vec![])
+    } else if let Some(d) = sh.body.d {
         n(
             "path",
             "body",
@@ -644,6 +802,50 @@ pub fn draw(who: &Identity, pose: &Pose, o: &DrawOpts) -> SNode {
         let lrx = rx * 1.55;
         let lry = ry * 1.15;
         let top = ry + 1.6 - lower * ry * 1.5;
+        // a bead has no white to show where it looks, so the whole eye leans
+        let (etx, ety) = if bead {
+            (ex + side * spread + gx * 6.0, ey + gy * 6.0)
+        } else {
+            (ex + side * spread, ey)
+        };
+        let lid_nodes = |kk: &String| -> Vec<SNode> {
+            vec![
+                n(
+                    "rect",
+                    &format!("{}.lid", kk),
+                    vec![
+                        ("x", f2(-rx * 2.2).into()),
+                        ("y", f2(-ry * 3.0).into()),
+                        ("width", f2(rx * 4.4).into()),
+                        ("height", f2(0.0f64.max(edge + ry * 3.0)).into()),
+                        ("transform", format!("rotate({})", f2(a)).into()),
+                        ("fill", fill.into()),
+                    ],
+                    vec![],
+                ),
+                n(
+                    "ellipse",
+                    &format!("{}.lower", kk),
+                    vec![
+                        ("cx", 0.into()),
+                        ("cy", f2(top + lry).into()),
+                        ("rx", f2(lrx).into()),
+                        ("ry", f2(lry).into()),
+                        ("fill", fill.into()),
+                    ],
+                    vec![],
+                ),
+            ]
+        };
+        // Haze: the lids cut the body's own paint, so they never read as patches
+        if haze {
+            defs.push(n(
+                "clipPath",
+                &format!("{}.lidshape", kk),
+                vec![("id", format!("{}-s{}", id, i).into())],
+                lid_nodes(&kk),
+            ));
+        }
         let mut parts: Vec<SNode> = vec![
             n(
                 "g",
@@ -655,33 +857,27 @@ pub fn draw(who: &Identity, pose: &Pose, o: &DrawOpts) -> SNode {
                 "g",
                 &format!("{}.lids", kk),
                 vec![("clip-path", format!("url(#{}-l{})", id, i).into())],
-                vec![
-                    n(
-                        "rect",
-                        &format!("{}.lid", kk),
-                        vec![
-                            ("x", f2(-rx * 2.2).into()),
-                            ("y", f2(-ry * 3.0).into()),
-                            ("width", f2(rx * 4.4).into()),
-                            ("height", f2(0.0f64.max(edge + ry * 3.0)).into()),
-                            ("transform", format!("rotate({})", f2(a)).into()),
-                            ("fill", fill.into()),
-                        ],
-                        vec![],
-                    ),
-                    n(
-                        "ellipse",
-                        &format!("{}.lower", kk),
-                        vec![
-                            ("cx", 0.into()),
-                            ("cy", f2(top + lry).into()),
-                            ("rx", f2(lrx).into()),
-                            ("ry", f2(lry).into()),
-                            ("fill", fill.into()),
-                        ],
-                        vec![],
-                    ),
-                ],
+                if haze {
+                    vec![n(
+                        "g",
+                        &format!("{}.lidpaint", kk),
+                        vec![("clip-path", format!("url(#{}-s{})", id, i).into())],
+                        vec![n(
+                            "use",
+                            &format!("{}.lidbody", kk),
+                            vec![
+                                ("href", format!("#{}-hz", id).into()),
+                                (
+                                    "transform",
+                                    format!("translate({} {})", f2(-etx), f2(-ety)).into(),
+                                ),
+                            ],
+                            vec![],
+                        )],
+                    )]
+                } else {
+                    lid_nodes(&kk)
+                },
             ),
         ];
         // a rimmed eye inks its lid edges too, so the outline follows the lids
@@ -771,16 +967,7 @@ pub fn draw(who: &Identity, pose: &Pose, o: &DrawOpts) -> SNode {
             &kk,
             vec![(
                 "transform",
-                if bead {
-                    format!(
-                        "translate({} {})",
-                        f2(ex + side * spread + gx * 6.0),
-                        f2(ey + gy * 6.0)
-                    )
-                } else {
-                    format!("translate({} {})", f2(ex + side * spread), js_num_to_string(ey))
-                }
-                .into(),
+                format!("translate({} {})", f2(etx), f2(ety)).into(),
             )],
             parts,
         ));
@@ -1542,20 +1729,17 @@ pub fn draw(who: &Identity, pose: &Pose, o: &DrawOpts) -> SNode {
         ));
     }
     // the plates sit a hair out of register at large sizes
-    let off = |dx: f64, dy: f64| -> Option<String> {
-        if riso {
-            Some(format!("translate({} {})", f2(dx * k * upp), f2(dy * k * upp)))
-        } else {
-            None
-        }
+    let mut front = vec![body_node];
+    front.extend(cheeks);
+    front.push(trait_node);
+    let mut back = eyes;
+    back.extend(brows);
+    back.push(mouth);
+    back.extend(wardrobe);
+    (front, back)
     };
-    let mut plate_a_children = vec![body_node];
-    plate_a_children.extend(cheeks);
-    plate_a_children.push(trait_node);
-    let mut plate_b_children = eyes;
-    plate_b_children.extend(brows);
-    plate_b_children.push(mouth);
-    plate_b_children.extend(wardrobe);
+    let plate_a_children = front;
+    let plate_b_children = back;
     let av = n(
         "g",
         "av",

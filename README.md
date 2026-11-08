@@ -31,24 +31,25 @@ let svg = to_svg("Sakayori", &PeekOptions {
     eyewear: Some("glasses".to_string()),
     headwear: Some("sprout".to_string()),
     neckwear: Some("tie".to_string()),
+    variant: Some("haze".to_string()), // "peek" (mặc định), "haze" hoặc "bloc"
     ..Default::default()
 });
 ```
 
 ## Kiểm chứng
 
-Bản port được kiểm chứng giống peek-vanilla đến từng byte trên corpus golden 500 trường hợp: tên được chọn lọc (unicode, emoji, khoảng trắng, NFC, ký tự điều khiển, escape XML), cả 11 biểu cảm, mọi ghi đè theo trục, mọi slot phụ kiện và các tổ hợp phụ kiện, kích thước, frame, riso, tiêu đề, id tường minh, hướng nhìn, cộng thêm 300 tên fuzz có seed.
+Bản port được kiểm chứng giống peek-vanilla đến từng byte trên corpus golden 667 trường hợp: tên được chọn lọc (unicode, emoji, khoảng trắng, NFC, ký tự điều khiển, escape XML), cả 11 biểu cảm, mọi ghi đè theo trục, mọi slot phụ kiện và các tổ hợp phụ kiện, cả ba biến thể vẽ và biến thể kết hợp phụ kiện, kích thước, frame, riso, tiêu đề, id tường minh, hướng nhìn, cộng thêm 300 tên fuzz có seed.
 
 ```sh
 node gen-corpus-rs.mjs   # sinh lại tests/corpus_data.rs từ peek-vanilla
-cargo test               # 500 trường hợp golden + kiểm tra tính xác định
+cargo test               # 667 trường hợp golden + kiểm tra tính xác định
 ```
 
 Một điểm khác biệt có chủ ý so với JS: một `&str` của Rust không thể chứa surrogate đơn lẻ, nên trường hợp corpus đó dùng tên đã được thay bằng U+FFFD ở cả hai phía, chính là thứ TextEncoder đưa vào hàm băm ở phía JS.
 
 ## Bản này port từ upstream phiên bản nào?
 
-Bản này port từ upstream @doan-labs/peek 1.1.0: hệ thống phụ kiện (eyewear, headwear, neckwear) trên nền engine 1.0. Các khuôn mặt không có phụ kiện vẫn render giống hệt trước đây đến từng byte. `PeekOptions` mang ba slot dưới dạng các field `eyewear`, `headwear` và `neckwear`.
+Bản này port từ upstream @doan-labs/peek 2.0.0: hệ thống phụ kiện của bản 1.1 (eyewear, headwear, neckwear) và các biến thể vẽ của bản 2.0 (haze, bloc) trên nền engine 1.0. Các khuôn mặt dùng biến thể peek vẫn render giống hệt trước đây đến từng byte. `PeekOptions` mang ba slot phụ kiện dưới dạng các field `eyewear`, `headwear`, `neckwear`, và cách vẽ dưới dạng field `variant`.
 
 ## Giấy phép
 
