@@ -16,6 +16,10 @@ const VB: [f64; 4] = [-30.0, -30.0, 400.0, 400.0];
 const FLOOR: f64 = 370.0;
 const THING: [f64; 2] = [330.0, 20.0];
 const RAD: f64 = std::f64::consts::PI / 180.0;
+// the sprout, drawn upward from where it is planted
+const STEM: &str = "M0 0Q3 -19 0 -36";
+const LEAF0: &str = "M0 -33C-24 -30 -38 -52 -25 -53C-12 -54 -2 -43 0 -33Z";
+const LEAF1: &str = "M0 -33C5 -54 28 -61 27 -48C26 -36 11 -31 0 -33Z";
 
 pub fn clamp(v: f64, a: f64, b: f64) -> f64 {
     if v < a {
@@ -1224,6 +1228,319 @@ pub fn draw(who: &Identity, pose: &Pose, o: &DrawOpts) -> SNode {
         }
     };
     let trait_node = n("g", "trait", vec![("transform", trait_t.into())], vec![shape]);
+
+    // Wardrobe lives on the same body transform as the face. Glasses grow
+    // around the eye sockets, never around the pupils, so gaze stays free.
+    let mut wardrobe: Vec<SNode> = Vec::new();
+    // strokes follow the same ramp as the face, capped so small hats stay hats
+    let w = |px: f64| -> String { f2(px * st.min(1.6)) };
+    let line = |width: String, d: String, stroke: &str, fill: &str| -> Vec<(&str, AttrVal)> {
+        vec![
+            ("fill", fill.into()),
+            ("stroke", stroke.into()),
+            ("stroke-width", width.into()),
+            ("stroke-linecap", "round".into()),
+            ("stroke-linejoin", "round".into()),
+            ("d", d.into()),
+        ]
+    };
+    if who.eyewear != "none" {
+        let lx = sh.eyes[0][0] - spread;
+        let rr = sh.eyes[1][0] + spread;
+        let ey = sh.eyes[0][1];
+        let gap = rr - lx;
+        let erx = (rx + 9.0).min((gap - 15.0) / 2.0);
+        let ery = ry + 9.0;
+        let glasses = who.eyewear == "glasses";
+        let lens_x = if glasses { erx } else { (rx + 11.0).min((gap - 12.0) / 2.0) };
+        let top = if glasses { ey - 4.0 } else { ey - ry - 2.0 };
+        let mut frames: Vec<SNode> = Vec::new();
+        frames.push(n(
+            "path",
+            "eyewear.bridge",
+            line(
+                w(5.25),
+                format!(
+                    "M{} {}Q{} {} {} {}",
+                    f2(lx + lens_x),
+                    f2(top),
+                    f2((lx + rr) / 2.0),
+                    f2(top - if glasses { 13.0 } else { 0.0 }),
+                    f2(rr - lens_x),
+                    f2(top)
+                ),
+                tables::ink("ink"),
+                "none",
+            ),
+            vec![],
+        ));
+        for (i, cx) in [lx, rr].iter().enumerate() {
+            let cx = *cx;
+            let key = format!("eyewear.lens{}", i);
+            frames.push(n(
+                "path",
+                &format!("{}.arm", key),
+                line(
+                    w(5.25),
+                    if i == 0 {
+                        format!("M{} {}L{} {}", f2(cx - lens_x - 9.0), f2(top + 2.0), f2(cx - lens_x), f2(top))
+                    } else {
+                        format!("M{} {}L{} {}", f2(cx + lens_x), f2(top), f2(cx + lens_x + 9.0), f2(top + 2.0))
+                    },
+                    tables::ink("ink"),
+                    "none",
+                ),
+                vec![],
+            ));
+            if glasses {
+                frames.push(n(
+                    "ellipse",
+                    &key,
+                    vec![
+                        ("fill", "none".into()),
+                        ("stroke", tables::ink("ink").into()),
+                        ("stroke-width", w(5.25).into()),
+                        ("stroke-linecap", "round".into()),
+                        ("stroke-linejoin", "round".into()),
+                        ("cx", f2(cx).into()),
+                        ("cy", ey.into()),
+                        ("rx", f2(erx).into()),
+                        ("ry", f2(ery).into()),
+                    ],
+                    vec![],
+                ));
+                frames.push(n(
+                    "path",
+                    &format!("{}.glint", key),
+                    line(
+                        w(3.0),
+                        format!(
+                            "M{} {}Q{} {} {} {}",
+                            f2(cx - erx * 0.65),
+                            f2(ey - ery * 0.45),
+                            f2(cx - erx * 0.5),
+                            f2(ey - ery * 0.8),
+                            f2(cx - erx * 0.2),
+                            f2(ey - ery * 0.86)
+                        ),
+                        tables::ink("paper"),
+                        "none",
+                    ),
+                    vec![],
+                ));
+            } else {
+                let h = ry * 2.0 + 9.0;
+                frames.push(n(
+                    "path",
+                    &key,
+                    vec![
+                        (
+                            "d",
+                            format!(
+                                "M{} {}H{}V{}Q{} {} {} {}Q{} {} {} {}Z",
+                                f2(cx - lens_x),
+                                f2(top),
+                                f2(cx + lens_x),
+                                f2(top + h * 0.55),
+                                f2(cx + lens_x),
+                                f2(top + h),
+                                f2(cx),
+                                f2(top + h),
+                                f2(cx - lens_x),
+                                f2(top + h),
+                                f2(cx - lens_x),
+                                f2(top + h * 0.55)
+                            )
+                            .into(),
+                        ),
+                        ("fill", tables::ink("ink").into()),
+                        ("stroke", tables::ink("ink").into()),
+                        ("stroke-width", w(3.0).into()),
+                        ("stroke-linejoin", "round".into()),
+                    ],
+                    vec![],
+                ));
+                frames.push(n(
+                    "path",
+                    &format!("{}.glint", key),
+                    line(
+                        w(4.0),
+                        format!("M{} {}l8 -8m-1 15 6 -6", f2(cx - lens_x * 0.58), f2(top + 19.0)),
+                        tables::ink("paper"),
+                        "none",
+                    ),
+                    vec![],
+                ));
+                frames.push(n(
+                    "circle",
+                    &format!("{}.pin", key),
+                    vec![
+                        ("cx", f2(cx + lens_x * 0.55).into()),
+                        ("cy", f2(top + h - 9.0).into()),
+                        ("r", 1.7.into()),
+                        ("fill", tables::ink("paper").into()),
+                    ],
+                    vec![],
+                ));
+            }
+        }
+        wardrobe.push(n("g", "eyewear", vec![], frames));
+    }
+    if who.headwear != "none" {
+        // Reserve the side opposite the crest. The seat stays fixed through
+        // expressions, so a moving crest never makes a hat switch sides.
+        let side: f64 = if who.trait_ == "ring" || who.trait_ == "dot" { -1.0 } else { 1.0 };
+        let cap = who.headwear == "cap";
+        let sprout = who.headwear == "sprout";
+        // The sheet measures placement across the crown, not along its arc.
+        // Solve that horizontal offset so low, round faces keep the brim above
+        // their brows instead of walking the hat down the side of the body.
+        let inset = if sprout { -6.0 } else if cap { -8.0 } else { 0.0 };
+        let offset = if sprout { 34.0 } else { 40.0 };
+        let mut lo = 0.0;
+        let mut hi = 160.0;
+        for _ in 0..16 {
+            let mid = (lo + hi) / 2.0;
+            let pt = seat(&sh.crown, inset, side * mid);
+            if side * (pt.x - 170.0) < offset {
+                lo = mid;
+            } else {
+                hi = mid;
+            }
+        }
+        let anchor = seat(&sh.crown, inset, side * (lo + hi) / 2.0);
+        let angle = clamp(anchor.a, -40.0, 40.0);
+        let mut parts: Vec<SNode> = Vec::new();
+        if cap {
+            parts.push(n(
+                "path",
+                "headwear.crown",
+                line(w(5.25), "M-33 0C-35 -20 -20 -39 0 -39C20 -39 35 -20 33 0Z".to_string(), tables::ink("ink"), tables::ink("paper")),
+                vec![],
+            ));
+            parts.push(n("path", "headwear.seam", line(w(3.5), "M-4 -38Q9 -24 8 -1".to_string(), tables::ink("ink"), "none"), vec![]));
+            parts.push(n(
+                "path",
+                "headwear.brim",
+                line(
+                    w(7.0),
+                    if side > 0.0 { "M-35 1Q8 4 52 3".to_string() } else { "M-52 3Q-8 4 35 1".to_string() },
+                    tables::ink("ink"),
+                    "none",
+                ),
+                vec![],
+            ));
+            parts.push(n(
+                "circle",
+                "headwear.button",
+                vec![
+                    ("cx", 0.into()),
+                    ("cy", (-40).into()),
+                    ("r", 3.5.into()),
+                    ("fill", tables::ink("ink").into()),
+                ],
+                vec![],
+            ));
+        } else if sprout {
+            parts.push(n(
+                "path",
+                "headwear.halo",
+                line(w(11.0), format!("{}{}{}", STEM, LEAF0, LEAF1), fill, "none"),
+                vec![],
+            ));
+            parts.push(n("path", "headwear.stem", line(w(4.5), STEM.to_string(), tables::ink("ink"), "none"), vec![]));
+            parts.push(n(
+                "path",
+                "headwear.leaf0",
+                line(w(4.0), LEAF0.to_string(), tables::ink("ink"), tables::color("mint").body),
+                vec![],
+            ));
+            parts.push(n(
+                "path",
+                "headwear.leaf1",
+                line(w(4.0), LEAF1.to_string(), tables::ink("ink"), tables::color("mint").deep),
+                vec![],
+            ));
+        } else {
+            parts.push(n(
+                "path",
+                "headwear.wings",
+                vec![
+                    ("d", "M-3 0C-13 -16 -28 -23 -29 -10C-31 2 -26 19 -16 13L-3 4L3 4L16 13C26 19 31 2 29 -10C28 -23 13 -16 3 0Z".into()),
+                    ("fill", tables::ink("ink").into()),
+                    // the same halo, painted under the fill
+                    ("stroke", fill.into()),
+                    ("stroke-width", w(6.0).into()),
+                    ("stroke-linejoin", "round".into()),
+                    ("paint-order", "stroke".into()),
+                ],
+                vec![],
+            ));
+            parts.push(n(
+                "ellipse",
+                "headwear.knot",
+                vec![
+                    ("cx", 0.into()),
+                    ("cy", 1.into()),
+                    ("rx", 6.into()),
+                    ("ry", 8.into()),
+                    ("fill", tables::accessory_ink("knot").into()),
+                ],
+                vec![],
+            ));
+        }
+        wardrobe.push(n(
+            "g",
+            "headwear",
+            vec![(
+                "transform",
+                format!(
+                    "translate({} {}) rotate({})",
+                    f2(anchor.x),
+                    f2(anchor.y),
+                    f2(if sprout { angle * 0.5 } else { angle })
+                )
+                .into(),
+            )],
+            parts,
+        ));
+    }
+    if who.neckwear == "tie" {
+        // The knot follows the mouth's lowest edge, including its skew. The
+        // floor clips the blade, just as it clips the creature itself.
+        let skew = (g("mk") * RAD).sin().abs() * mw;
+        let bottom = 0.0f64.max((mt * kb).max(mb * kb)) + skew + m.sw * st;
+        wardrobe.push(n(
+            "g",
+            "neckwear",
+            vec![
+                (
+                    "transform",
+                    format!(
+                        "translate({} {})",
+                        js_num_to_string(m.x),
+                        f2(m.y + g("my") + bottom + 8.0)
+                    )
+                    .into(),
+                ),
+                ("fill", tables::ink("ink").into()),
+            ],
+            vec![
+                n(
+                    "path",
+                    "neckwear.knot",
+                    vec![("d", "M-9 0Q-11 0 -9 4L-5 11Q0 15 5 11L9 4Q11 0 9 0Z".into())],
+                    vec![],
+                ),
+                n(
+                    "path",
+                    "neckwear.blade",
+                    vec![("d", "M-4 15L-13 63Q-14 66 -11 69L0 79L11 69Q14 66 13 63L4 15Z".into())],
+                    vec![],
+                ),
+            ],
+        ));
+    }
     // the plates sit a hair out of register at large sizes
     let off = |dx: f64, dy: f64| -> Option<String> {
         if riso {
@@ -1238,6 +1555,7 @@ pub fn draw(who: &Identity, pose: &Pose, o: &DrawOpts) -> SNode {
     let mut plate_b_children = eyes;
     plate_b_children.extend(brows);
     plate_b_children.push(mouth);
+    plate_b_children.extend(wardrobe);
     let av = n(
         "g",
         "av",

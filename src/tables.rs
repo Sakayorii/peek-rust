@@ -37,7 +37,11 @@ pub static COLORS: &[(&str, ColorDef)] = &[("lavender", ColorDef { body: "#D8CDF
 
 pub static PARTS: &[(&str, &[&str])] = &[("eyes", &["oval", "bead", "ring"]), ("brows", &["arch", "bar", "wedge", "dash"]), ("mouth", &["poly", "round", "line", "box"]), ("cheeks", &["oval", "dots", "lines"]), ("trait", &["square", "fin", "ring", "dot", "peak"])];
 
-pub static VERSIONS: &[(u32, &[(&str, u32)])] = &[(1, &[("face", 4), ("color", 7), ("eyes", 3), ("brows", 4), ("mouth", 4), ("cheeks", 3), ("trait", 5)])];
+pub static ACCESSORY_INK: &[(&str, &str)] = &[("knot", "#E5412D")];
+
+pub static ACCESSORIES: &[(&str, &[&str])] = &[("eyewear", &["none", "glasses", "sunglasses"]), ("headwear", &["none", "bow", "cap", "sprout"]), ("neckwear", &["none", "tie"])];
+
+pub static VERSIONS: &[(u32, &[(&str, u32)])] = &[(1, &[("face", 4), ("color", 7), ("eyes", 3), ("brows", 4), ("mouth", 4), ("cheeks", 3), ("trait", 5), ("eyewear", 1), ("headwear", 1), ("neckwear", 1)])];
 
 pub const LATEST: u32 = 1;
 
@@ -78,6 +82,14 @@ pub fn expression(name: &str) -> &'static [(&'static str, f64)] {
 pub fn expression_names() -> Vec<&'static str> { EXPRESSIONS.iter().map(|(n, _)| *n).collect() }
 pub fn version_lengths(v: u32) -> Option<&'static [(&'static str, u32)]> {
     VERSIONS.iter().find(|(n, _)| *n == v).map(|(_, l)| *l)
+}
+pub fn accessory_list(slot: &str) -> &'static [&'static str] {
+    ACCESSORIES.iter().find(|(n, _)| *n == slot).map(|(_, l)| *l)
+        .unwrap_or_else(|| panic!("unknown accessory slot {}", slot))
+}
+pub fn accessory_ink(name: &str) -> &'static str {
+    ACCESSORY_INK.iter().find(|(n, _)| *n == name).map(|(_, c)| *c)
+        .unwrap_or_else(|| panic!("unknown accessory ink {}", name))
 }
 pub fn ink(name: &str) -> &'static str {
     INK.iter().find(|(n, _)| *n == name).map(|(_, c)| *c)

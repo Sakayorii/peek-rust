@@ -55,6 +55,9 @@ pub fn lists() -> Vec<(&'static str, Vec<&'static str>)> {
         ("mouth", tables::part_list("mouth").to_vec()),
         ("cheeks", tables::part_list("cheeks").to_vec()),
         ("trait", tables::part_list("trait").to_vec()),
+        ("eyewear", tables::accessory_list("eyewear").to_vec()),
+        ("headwear", tables::accessory_list("headwear").to_vec()),
+        ("neckwear", tables::accessory_list("neckwear").to_vec()),
     ]
 }
 
@@ -94,6 +97,9 @@ pub struct Identity {
     pub mouth: String,
     pub cheeks: String,
     pub trait_: String,
+    pub eyewear: String,
+    pub headwear: String,
+    pub neckwear: String,
     pub persona: Persona,
 }
 
@@ -147,6 +153,9 @@ pub fn identify(name: &str, version: u32) -> Identity {
         mouth: pick("mouth"),
         cheeks: pick("cheeks"),
         trait_: pick("trait"),
+        eyewear: pick("eyewear"),
+        headwear: pick("headwear"),
+        neckwear: pick("neckwear"),
         persona,
     }
 }

@@ -18,6 +18,9 @@ pub struct PeekOptions {
     pub mouth: Option<String>,
     pub cheeks: Option<String>,
     pub trait_: Option<String>,
+    pub eyewear: Option<String>,
+    pub headwear: Option<String>,
+    pub neckwear: Option<String>,
     pub expression: String,
     /// [x, y] in -1..1, overrides the expression's gaze.
     pub gaze: Option<[f64; 2]>,
@@ -42,6 +45,9 @@ impl Default for PeekOptions {
             mouth: None,
             cheeks: None,
             trait_: None,
+            eyewear: None,
+            headwear: None,
+            neckwear: None,
             expression: "normal".to_string(),
             gaze: None,
             size: 64.0,
@@ -68,8 +74,8 @@ pub struct DrawOpts {
     pub title: Option<String>,
 }
 
-fn who_to_json(who: &Identity) -> JVal {
-    JVal::Obj(vec![
+fn who_to_json(who: &Identity, wardrobe: bool) -> JVal {
+    let mut entries: Vec<(String, JVal)> = vec![
         ("key".to_string(), JVal::Str(who.key.clone())),
         ("hash".to_string(), JVal::Num(who.hash as f64)),
         ("version".to_string(), JVal::Num(who.version as f64)),
@@ -80,34 +86,42 @@ fn who_to_json(who: &Identity) -> JVal {
         ("mouth".to_string(), JVal::Str(who.mouth.clone())),
         ("cheeks".to_string(), JVal::Str(who.cheeks.clone())),
         ("trait".to_string(), JVal::Str(who.trait_.clone())),
-        (
-            "persona".to_string(),
-            JVal::Obj(vec![
-                ("spread".to_string(), JVal::Num(who.persona.spread)),
-                ("blink".to_string(), JVal::Num(who.persona.blink)),
-                (
-                    "add".to_string(),
-                    JVal::Obj(
-                        who.persona
-                            .add
-                            .iter()
-                            .map(|(k, v)| (k.clone(), JVal::Num(*v)))
-                            .collect(),
-                    ),
+    ];
+    // Faces without accessories keep the byte-level peek@1 contract: their
+    // id hash is computed over the identity without the wardrobe fields.
+    if wardrobe {
+        entries.push(("eyewear".to_string(), JVal::Str(who.eyewear.clone())));
+        entries.push(("headwear".to_string(), JVal::Str(who.headwear.clone())));
+        entries.push(("neckwear".to_string(), JVal::Str(who.neckwear.clone())));
+    }
+    entries.push((
+        "persona".to_string(),
+        JVal::Obj(vec![
+            ("spread".to_string(), JVal::Num(who.persona.spread)),
+            ("blink".to_string(), JVal::Num(who.persona.blink)),
+            (
+                "add".to_string(),
+                JVal::Obj(
+                    who.persona
+                        .add
+                        .iter()
+                        .map(|(k, v)| (k.clone(), JVal::Num(*v)))
+                        .collect(),
                 ),
-                (
-                    "mul".to_string(),
-                    JVal::Obj(
-                        who.persona
-                            .mul
-                            .iter()
-                            .map(|(k, v)| (k.clone(), JVal::Num(*v)))
-                            .collect(),
-                    ),
+            ),
+            (
+                "mul".to_string(),
+                JVal::Obj(
+                    who.persona
+                        .mul
+                        .iter()
+                        .map(|(k, v)| (k.clone(), JVal::Num(*v)))
+                        .collect(),
                 ),
-            ]),
-        ),
-    ])
+            ),
+        ]),
+    ));
+    JVal::Obj(entries)
 }
 
 fn pose_to_json(pose: &Pose) -> JVal {
@@ -144,24 +158,37 @@ fn to_base36(mut v: u32) -> String {
     out.iter().rev().collect()
 }
 
+// an unknown item from untyped callers keeps what the name picked
+fn wear(opt: &Option<String>, base: &str, slot: &str) -> String {
+    match opt {
+        Some(v) if crate::tables::accessory_list(slot).contains(&v.as_str()) => v.clone(),
+        _ => base.to_string(),
+    }
+}
+
 pub fn settle(name: &str, o: &PeekOptions, live: bool) -> (Identity, Pose, DrawOpts) {
     let base = identify(name, o.version);
     let who = Identity {
-        face: o.face.clone().unwrap_or(base.face),
-        color: o.color.clone().unwrap_or(base.color),
-        eyes: o.eyes.clone().unwrap_or(base.eyes),
-        brows: o.brows.clone().unwrap_or(base.brows),
-        mouth: o.mouth.clone().unwrap_or(base.mouth),
-        cheeks: o.cheeks.clone().unwrap_or(base.cheeks),
-        trait_: o.trait_.clone().unwrap_or(base.trait_),
+        face: o.face.clone().unwrap_or_else(|| base.face.clone()),
+        color: o.color.clone().unwrap_or_else(|| base.color.clone()),
+        eyes: o.eyes.clone().unwrap_or_else(|| base.eyes.clone()),
+        brows: o.brows.clone().unwrap_or_else(|| base.brows.clone()),
+        mouth: o.mouth.clone().unwrap_or_else(|| base.mouth.clone()),
+        cheeks: o.cheeks.clone().unwrap_or_else(|| base.cheeks.clone()),
+        trait_: o.trait_.clone().unwrap_or_else(|| base.trait_.clone()),
+        eyewear: wear(&o.eyewear, &base.eyewear, "eyewear"),
+        headwear: wear(&o.headwear, &base.headwear, "headwear"),
+        neckwear: wear(&o.neckwear, &base.neckwear, "neckwear"),
         ..base
     };
+    let wardrobe =
+        who.eyewear != "none" || who.headwear != "none" || who.neckwear != "none";
     let pose = rest_pose(&who, &o.expression, o.gaze);
     let id = o.id.clone().unwrap_or_else(|| {
         format!(
             "peek-{}",
             to_base36(fnv1a(&js_json_stringify(&JVal::Arr(vec![
-                who_to_json(&who),
+                who_to_json(&who, wardrobe),
                 pose_to_json(&pose),
                 look_to_json(o, live),
             ]))))

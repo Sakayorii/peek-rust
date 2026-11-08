@@ -15,6 +15,9 @@ const BROWS = ['arch', 'bar', 'wedge', 'dash'];
 const MOUTHS = ['poly', 'round', 'line', 'box'];
 const CHEEKS = ['oval', 'dots', 'lines'];
 const TRAITS = ['square', 'fin', 'ring', 'dot', 'peak'];
+const EYEWEAR = ['glasses', 'sunglasses'];
+const HEADWEAR = ['bow', 'cap', 'sprout'];
+const NECKWEAR = ['tie'];
 
 function rng(seed) {
   let a = seed | 0;
@@ -49,8 +52,25 @@ const axisCases = [
   ...EYES.map((eyes) => ({ eyes })), ...BROWS.map((brows) => ({ brows })),
   ...MOUTHS.map((mouth) => ({ mouth })), ...CHEEKS.map((cheeks) => ({ cheeks })),
   ...TRAITS.map((trait) => ({ trait })),
+  ...EYEWEAR.map((eyewear) => ({ eyewear })), ...HEADWEAR.map((headwear) => ({ headwear })),
+  ...NECKWEAR.map((neckwear) => ({ neckwear })),
 ];
 for (const opts of axisCases) add('Sakayori', opts);
+// accessories: every slot alone (in axisCases above), full outfits,
+// combinations, and accessories combined with expressions and faces
+for (const eyewear of EYEWEAR) for (const headwear of HEADWEAR)
+  add('Sakayori', { eyewear, headwear, neckwear: 'tie' });
+for (const headwear of HEADWEAR) add('Rem', { headwear, eyewear: 'glasses' });
+for (const expression of EXPRESSIONS) {
+  add('Sakayori', { expression, eyewear: 'glasses', headwear: 'cap', neckwear: 'tie' });
+  add('Rem', { expression, eyewear: 'sunglasses', headwear: 'sprout' });
+  add('Nguyễn Văn An', { expression, headwear: 'bow' });
+}
+for (const face of FACES) add('Sakayori', { face, eyewear: 'sunglasses', headwear: 'cap', neckwear: 'tie' });
+add('Sakayori', { eyewear: 'glasses', size: 128 });
+add('Sakayori', { headwear: 'sprout', size: 24 });
+add('Sakayori', { neckwear: 'tie', expression: 'confused' });
+
 for (const size of [24, 29, 30, 39, 40, 55, 56, 95, 96, 120, 480, 640])
   add('Sakayori', { size });
 for (const frame of ['ink', 'bone', 'paper', 'none']) add('Sakayori', { frame });
@@ -112,6 +132,9 @@ pub struct GoldenCase {
     pub mouth: Option<&'static str>,
     pub cheeks: Option<&'static str>,
     pub trait_: Option<&'static str>,
+    pub eyewear: Option<&'static str>,
+    pub headwear: Option<&'static str>,
+    pub neckwear: Option<&'static str>,
     pub expression: &'static str,
     pub gaze: Option<[f64; 2]>,
     pub size: f64,
@@ -135,7 +158,7 @@ for (const { name: rawName, opts } of cases) {
   const svg = toSvg(name, toJsOpts(opts));
   const f = (k) => ropt(opts[k]);
   const gaze = opts.gaze ? `Some([${rnum(opts.gaze[0])}, ${rnum(opts.gaze[1])}])` : 'None';
-  src += `    GoldenCase { name: ${rstr(name)}, face: ${f('face')}, color: ${f('color')}, eyes: ${f('eyes')}, brows: ${f('brows')}, mouth: ${f('mouth')}, cheeks: ${f('cheeks')}, trait_: ${f('trait')}, expression: ${rstr(opts.expression || 'normal')}, gaze: ${gaze}, size: ${rnum(opts.size || 64)}, frame: ${rstr(opts.frame || 'ink')}, square: ${opts.square !== false}, riso: ${!!opts.riso}, id: ${f('id')}, title: ${f('title')}, hide_title: ${!!opts.hideTitle}, svg: ${rstr(svg)} },\n`;
+  src += `    GoldenCase { name: ${rstr(name)}, face: ${f('face')}, color: ${f('color')}, eyes: ${f('eyes')}, brows: ${f('brows')}, mouth: ${f('mouth')}, cheeks: ${f('cheeks')}, trait_: ${f('trait')}, eyewear: ${f('eyewear')}, headwear: ${f('headwear')}, neckwear: ${f('neckwear')}, expression: ${rstr(opts.expression || 'normal')}, gaze: ${gaze}, size: ${rnum(opts.size || 64)}, frame: ${rstr(opts.frame || 'ink')}, square: ${opts.square !== false}, riso: ${!!opts.riso}, id: ${f('id')}, title: ${f('title')}, hide_title: ${!!opts.hideTitle}, svg: ${rstr(svg)} },\n`;
 }
 src += '];\n';
 
